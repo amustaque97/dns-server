@@ -60,7 +60,7 @@ impl BytePackerBuffer {
     }
 
     /// Read two bytes, stepping two steps forward
-    fn read_u16(&mut self) -> Result(u16) {
+    pub fn read_u16(&mut self) -> Result(u16) {
         let res = ((self.read()? as u16) << 8) | (self.read()? as u16);
 
         Ok(res)
