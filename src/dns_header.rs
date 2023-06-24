@@ -1,6 +1,9 @@
 use crate::{result_code::ResultCode, byte_packer_buffer::BytePackerBuffer};
 
-#[dervie(Clone, Debug)]
+type Error = Box<dyn std::error::Error>;
+type Result<T> = std::result::Result<T, Error>;
+
+#[derive(Clone, Debug)]
 pub struct DnsHeader {
     pub id: u16, // 16 bits
 
