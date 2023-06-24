@@ -17,7 +17,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 fn main() -> Result<()> {
     // Perform an A query for google.com
-    let qname = "google.com";
+    let qname = "www.yahoo.com";
     let qtype = QueryType::A;
 
     // Using google public DNS server
