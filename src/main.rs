@@ -1,69 +1,126 @@
-use std::net::UdpSocket;
 use byte_packet_buffer::BytePacketBuffer;
 use dns_packet::DnsPacket;
+use std::net::UdpSocket;
 
-use crate::{query_type::QueryType, dns_question::DnsQuestion};
+use crate::{dns_question::DnsQuestion, query_type::QueryType, result_code::ResultCode};
 
 mod byte_packet_buffer;
-mod result_code;
 mod dns_header;
-mod query_type;
+mod dns_packet;
 mod dns_question;
 mod dns_record;
-mod dns_packet;
+mod query_type;
+mod result_code;
 
 type Error = Box<dyn std::error::Error>;
 pub type Result<T> = std::result::Result<T, Error>;
 
-fn main() -> Result<()> {
-    // Perform an A query for google.com
-    let qname = "www.yahoo.com";
-    let qtype = QueryType::A;
-
-    // Using google public DNS server
+fn lookup(qname: &str, qtype: QueryType) -> Result<DnsPacket> {
+    // Forward queries to Google's public DNS
     let server = ("8.8.8.8", 53);
 
-    // Bind a UDP socket to an arbitary port
     let socket = UdpSocket::bind(("0.0.0.0", 43210))?;
 
-    // Build our query packet. It's important that we remember to set the
-    // `recursion_desired` flag. As noted earlier, the packet ID is arbitrary.
     let mut packet = DnsPacket::new();
 
     packet.header.id = 6666;
     packet.header.questions = 1;
     packet.header.recursion_desired = true;
-    packet.questions.push(DnsQuestion::new(qname.to_string(), qtype));
+    packet
+        .questions
+        .push(DnsQuestion::new(qname.to_string(), qtype));
 
-    // Use our new write method to write the packet to buffer...
     let mut req_buffer = BytePacketBuffer::new();
     packet.write(&mut req_buffer)?;
-
-    // and send it off to the server using our socket
     socket.send_to(&req_buffer.buf[0..req_buffer.pos], server)?;
 
-    // To prepare for receiving the response, we'll create a new `BytePacketBuffer`,
-    // and ask the socket to write the response directly into our buffer.
     let mut res_buffer = BytePacketBuffer::new();
     socket.recv_from(&mut res_buffer.buf)?;
 
-    // As per the previous section, `DnsPacket::from_buffer()` is then used to 
-    // actually parse the packet after which we can print the response.
-    let packet = DnsPacket::from_buffer(&mut res_buffer)?;
-    println!("{:#?}", packet.header);
+    DnsPacket::from_buffer(&mut res_buffer)
+}
 
-    for q in packet.questions {
-        println!("{:#?}", q);
+/// Handle a single incoming packet
+fn handle_query(socket: &UdpSocket) -> Result<()> {
+    // With a socket ready, we can go ahead and read a packet. This will
+    // block until one is received.
+    let mut req_buffer = BytePacketBuffer::new();
+
+    // The `recv_from` function will write the data into the provided buffer,
+    // and return the length of the data read as well as the source address.
+    // We're not interested in the length, but we need to keep track of the
+    // source in order to send our reply later on.
+    let (_, src) = socket.recv_from(&mut req_buffer.buf)?;
+
+    // Next, `DnsPacket::from_buffer` is used to parse the raw bytes into a
+    // `DnsPacket`.
+    let mut request = DnsPacket::from_buffer(&mut req_buffer)?;
+
+    // Create and initialize the response object
+    let mut packet = DnsPacket::new();
+    packet.header.id = request.header.id;
+    packet.header.recursion_desired = true;
+    packet.header.recursion_available = true;
+    packet.header.response = true;
+
+    // In the normal case, exactly one question is present
+    if let Some(question) = request.questions.pop() {
+        println!("Received query: {:?}", question);
+
+        // Since all is set up and as expected, the query can be forwarded to the
+        // target server. There's always the possibility that the query will
+        // fail, in which case `SERVFAIL` response code is set to indicate
+        // as much to the client. If rather everything goes as planned, the
+        // question and response records as copied into our response object.
+        if let Ok(result) = lookup(&question.name, question.qtype) {
+            packet.questions.push(question);
+            packet.header.rescode = result.header.rescode;
+
+            for rec in result.answers {
+                println!("Answer: {:?}", rec);
+                packet.answers.push(rec);
+            }
+            for rec in result.authorities {
+                println!("Authority: {:?}", rec);
+                packet.authorities.push(rec);
+            }
+            for rec in result.resources {
+                println!("Resource: {:?}", rec);
+                packet.resources.push(rec);
+            }
+        } else {
+            packet.header.rescode = ResultCode::SERVFAIL;
+        }
     }
-    for rec in packet.answers {
-        println!("{:#?}", rec);
+    // Being mindful of how unreliable input data from arbitrary senders can be, we
+    // need make sure that a question is actually present. If not, we return `FORMER`
+    // to indicate that the sender made soemthing wrong.
+    else {
+        packet.header.rescode = ResultCode::FORMERR;
     }
-    for rec in packet.authorities {
-        println!("{:#?}", rec);
-    }
-    for rec in packet.resources {
-        println!("{:#?}", rec);
-    }
+
+    // The only thing remaining is to encode our response and send it off!
+    let mut res_buffer = BytePacketBuffer::new();
+    packet.write(&mut res_buffer)?;
+
+    let len = res_buffer.pos();
+    let data = res_buffer.get_range(0, len)?;
+
+    socket.send_to(data, src)?;
 
     Ok(())
+}
+
+fn main() -> Result<()> {
+    // Bind an UDP socket on port 2053
+    let socket = UdpSocket::bind(("0.0.0.0", 2053))?;
+
+    // For now, queries are handled sequentially, so an infinite loop for servicing
+    // requests is initiated.
+    loop {
+        match handle_query(&socket) {
+            Ok(_) => {}
+            Err(e) => eprintln!("An error occurred: {}", e),
+        }
+    }
 }
