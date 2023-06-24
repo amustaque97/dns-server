@@ -17,7 +17,7 @@ impl BytePacketBuffer {
     }
 
     /// Current position within buffer
-    fn pos(&self) -> usize {
+    pub fn pos(&self) -> usize {
         self.pos
     }
 

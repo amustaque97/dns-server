@@ -1,8 +1,8 @@
 use std::{fs::File, io::Read};
-use byte_packer_buffer::BytePacketBuffer;
+use byte_packet_buffer::BytePacketBuffer;
 use dns_packet::DnsPacket;
 
-mod byte_packer_buffer;
+mod byte_packet_buffer;
 mod result_code;
 mod dns_header;
 mod query_type;

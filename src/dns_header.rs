@@ -1,4 +1,4 @@
-use crate::{result_code::ResultCode, byte_packer_buffer::BytePacketBuffer};
+use crate::{result_code::ResultCode, byte_packet_buffer::BytePacketBuffer};
 
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
