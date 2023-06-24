@@ -1,6 +1,6 @@
 use std::net::Ipv4Addr;
 
-use crate::{byte_packer_buffer::BytePackerBuffer, query_type::QueryType};
+use crate::{byte_packer_buffer::BytePacketBuffer, query_type::QueryType};
 
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
@@ -22,7 +22,7 @@ pub enum DnsRecord {
 }
 
 impl DnsRecord {
-    pub fn read(buffer: &mut BytePackerBuffer) -> Result<DnsRecord> {
+    pub fn read(buffer: &mut BytePacketBuffer) -> Result<DnsRecord> {
         let mut domain = String::new();
         buffer.read_qname(&mut domain)?;
 

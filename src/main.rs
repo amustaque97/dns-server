@@ -1,5 +1,5 @@
 use std::{fs::File, io::Read};
-use byte_packer_buffer::BytePackerBuffer;
+use byte_packer_buffer::BytePacketBuffer;
 use dns_packet::DnsPacket;
 
 mod byte_packer_buffer;
@@ -15,7 +15,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 fn main() -> Result<()> {
     let mut f = File::open("response_packet.txt")?;
-    let mut buffer = BytePackerBuffer::new();
+    let mut buffer = BytePacketBuffer::new();
     f.read(&mut buffer.buf)?;
 
     let packet = DnsPacket::from_buffer(&mut buffer)?;

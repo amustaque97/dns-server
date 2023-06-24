@@ -1,5 +1,5 @@
 use crate::{
-    byte_packer_buffer::BytePackerBuffer, dns_header::DnsHeader, dns_question::DnsQuestion,
+    byte_packer_buffer::BytePacketBuffer, dns_header::DnsHeader, dns_question::DnsQuestion,
     dns_record::DnsRecord, query_type::QueryType,
 };
 
@@ -26,7 +26,7 @@ impl DnsPacket {
         }
     }
 
-    pub fn from_buffer(buffer: &mut BytePackerBuffer) -> Result<DnsPacket> {
+    pub fn from_buffer(buffer: &mut BytePacketBuffer) -> Result<DnsPacket> {
         let mut result = DnsPacket::new();
         result.header.read(buffer)?;
 

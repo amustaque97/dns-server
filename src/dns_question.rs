@@ -1,4 +1,4 @@
-use crate::{byte_packer_buffer::BytePackerBuffer, query_type::QueryType};
+use crate::{byte_packer_buffer::BytePacketBuffer, query_type::QueryType};
 
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
@@ -14,7 +14,7 @@ impl DnsQuestion {
         DnsQuestion { name, qtype }
     }
 
-    pub fn read(&mut self, buffer: &mut BytePackerBuffer) -> Result<()> {
+    pub fn read(&mut self, buffer: &mut BytePacketBuffer) -> Result<()> {
         buffer.read_qname(&mut self.name);
         self.qtype = QueryType::from_num(buffer.read_u16()?); // qtype
         let _ = buffer.read_u16()?; // class

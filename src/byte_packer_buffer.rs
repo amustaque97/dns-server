@@ -1,16 +1,16 @@
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
 
-pub struct BytePackerBuffer {
+pub struct BytePacketBuffer {
     pub buf: [u8; 512],
     pub pos: usize,
 }
 
-impl BytePackerBuffer {
+impl BytePacketBuffer {
     /// This gives us a fresh buffer for holding the packet contents, and a
     /// field for keeping track of where we are.
-    pub fn new() -> BytePackerBuffer {
-        BytePackerBuffer {
+    pub fn new() -> BytePacketBuffer {
+        BytePacketBuffer {
             buf: [0; 512],
             pos: 0,
         }

@@ -1,4 +1,4 @@
-use crate::{result_code::ResultCode, byte_packer_buffer::BytePackerBuffer};
+use crate::{result_code::ResultCode, byte_packer_buffer::BytePacketBuffer};
 
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
@@ -7,7 +7,7 @@ type Result<T> = std::result::Result<T, Error>;
 pub struct DnsHeader {
     pub id: u16, // 16 bits
 
-    pub recursion_descired: bool,   // 1 bit
+    pub recursion_desired: bool,   // 1 bit
     pub truncated_message: bool,    // 1 bit
     pub authoritative_answer: bool, // 1 bit
     pub opcode: u8,                 // 4 bits
@@ -29,7 +29,7 @@ impl DnsHeader {
     pub fn new() -> DnsHeader {
         DnsHeader {
             id: 0,
-            recursion_descired: false,
+            recursion_desired: false,
             truncated_message: false,
             authoritative_answer: false,
             opcode:0,
@@ -48,13 +48,13 @@ impl DnsHeader {
         }
     }
 
-    pub fn read(&mut self, buffer: &mut BytePackerBuffer) -> Result<()> {
+    pub fn read(&mut self, buffer: &mut BytePacketBuffer) -> Result<()> {
         self.id = buffer.read_u16()?;
 
         let flags = buffer.read_u16()?;
         let a = (flags >> 8) as u8;
         let b = (flags & 0xFF) as u8;
-        self.recursion_descired = (a & (1 << 0)) > 0;
+        self.recursion_desired = (a & (1 << 0)) > 0;
         self.truncated_message = (a & (1 << 1)) > 0;
         self.authoritative_answer = (a & (1 << 2)) > 0;
         self.opcode = (a >> 3) & 0x0F;
@@ -70,6 +70,33 @@ impl DnsHeader {
         self.answers = buffer.read_u16()?;
         self.authoritative_entries = buffer.read_u16()?;
         self.resource_entries = buffer.read_u16()?;
+
+        Ok(())
+    }
+
+    pub fn write(&self, buffer: &mut BytePacketBuffer) -> Result<()> {
+        buffer.write_u16(self.id)?;
+
+        buffer.write_u8(
+            (self.recursion_desired as u8)
+                | ((self.truncated_message as u8) << 1)
+                | ((self.authoritative_answer as u8) << 2)
+                | (self.opcode << 3)
+                | ((self.response as u8) << 7) as u8,
+        )?;
+
+        buffer.write_u8(
+            (self.rescode as u8)
+                | ((self.checking_disabled as u8) << 4)
+                | ((self.authed_data as u8) << 5)
+                | ((self.z as u8) << 6)
+                | ((self.recursion_available as u8) << 7),
+        )?;
+
+        buffer.write_u16(self.questions)?;
+        buffer.write_u16(self.answers)?;
+        buffer.write_u16(self.authoritative_entries)?;
+        buffer.write_u16(self.resource_entries)?;
 
         Ok(())
     }
