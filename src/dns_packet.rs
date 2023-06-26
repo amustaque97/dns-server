@@ -1,3 +1,5 @@
+use std::net::Ipv4Addr;
+
 use crate::{
     byte_packet_buffer::BytePacketBuffer, dns_header::DnsHeader, dns_question::DnsQuestion,
     dns_record::DnsRecord, query_type::QueryType,
@@ -54,7 +56,6 @@ impl DnsPacket {
         Ok(result)
     }
 
-
     pub fn write(&mut self, buffer: &mut BytePacketBuffer) -> Result<()> {
         self.header.questions = self.questions.len() as u16;
         self.header.answers = self.answers.len() as u16;
@@ -77,5 +78,64 @@ impl DnsPacket {
         }
 
         Ok(())
+    }
+
+    /// It's useful to be able to pick a random A from the packet. When we
+    /// get multiple IP's for a single name, it doesn't matter which one we
+    /// choose, so in those cases we can now pick one at random.
+    pub fn get_random_a(&self) -> Option<Ipv4Addr> {
+        self.answers.iter().find_map(|record| match record {
+            DnsRecord::A { addr, .. } => Some(*addr),
+            _ => None,
+        })
+    }
+
+    /// A helper function which returns an iterator over all name servers in
+    /// the authorities section, respresented as (domain, host) tuples
+    pub fn get_ns<'a>(&'a self, qname: &'a str) -> impl Iterator<Item = (&'a str, &'a str)> {
+        self.authorities
+            .iter()
+            // In practice, there are always NS records in well formed packages.
+            // Convert the NS record to a tuple which has only the data we need
+            // to make it easy to work with.
+            .filter_map(|record| match record {
+                DnsRecord::NS { domain, host, .. } => Some((domain.as_str(), host.as_str())),
+                _ => None,
+            })
+            // Discard servers which aren't authorative to our query
+            .filter(move |(domain, _)| qname.ends_with(*domain))
+    }
+
+    /// We'll use the fact that the name servers often bundle the corresponding
+    /// A records when replying to an NS query to implement a funciton that
+    /// returns the actual IP for an NS record if possible.
+    pub fn get_resolved_ns(&self, qname: &str) -> Option<Ipv4Addr> {
+        // Get an iterator over the nameservers in the authorities section
+        self.get_ns(qname)
+            // Now we need to look for a matching A record in the additional
+            // section. Since we just want the first valid record, we can just
+            // build a stream of matching records
+            .find_map(|(_, host)| {
+                self.resources
+                    .iter()
+                    // Filter for A records where the domain match the host
+                    // of the NS record that we are constantly processing
+                    .find_map(move |record| match record {
+                        DnsRecord::A { domain, addr, .. } if domain == host => Some(*addr),
+                        _ => None,
+                    })
+            })
+    }
+
+    /// However, not all name servers are as that nice. In certain cases there won't
+    /// be any A records in the additioinal section, and we'll have to perform *another*
+    /// lookup in the mdist. For this, we introduce a method for returning the host
+    /// name of an appropirate name server.
+    pub fn get_unresolved_ns<'a>(&'a self, qname: &'a str) -> Option<&'a str> {
+        // Get an iterator over the nameservers in the authorities section
+        self.get_ns(qname)
+            .map(|(_, host)| host)
+            // Finally, pick the first valid entry
+            .next()
     }
 }
